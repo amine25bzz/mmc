@@ -98,7 +98,7 @@ input[type=range]{width:100%;accent-color:var(--ac);height:42px;margin:0}
 <script>
 const $=s=>document.querySelector(s);
 const out=$('#out'),recBtn=$('#rec'),st=$('#st');
-let finalT='',interim='',on=false,rc=null,t0=0,timer=null,want=false;
+let base='',sessF='',finalT='',interim='',on=false,rc=null,t0=0,timer=null,want=false;
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 
 ['#5b5bf0','#ef4444','#16a34a','#f59e0b','#0ea5e9','#111827'].forEach(c=>{
@@ -122,21 +122,27 @@ function render(){
 function setup(){
   rc=new SR();rc.continuous=true;rc.interimResults=true;rc.maxAlternatives=1;rc.lang=$('#lang').value;
   rc.onresult=e=>{
-    let it='';
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      const r=e.results[i],tx=r[0].transcript.trim();
-      if(r.isFinal){if(tx)finalT+=(finalT?' ':'')+tx}else it+=(it?' ':'')+tx}
-    interim=it;render()};
+    const segs=[];
+    for(let i=0;i<e.results.length;i++){
+      const r=e.results[i],tx=r[0].transcript.trim();if(!tx)continue;
+      const l=segs[segs.length-1];
+      if(l){
+        if(l.t===tx||l.t.endsWith(tx)){if(r.isFinal)l.f=true;continue}
+        if(tx.startsWith(l.t)){l.t=tx;l.f=r.isFinal;continue}}
+      segs.push({t:tx,f:r.isFinal})}
+    sessF=segs.filter(s=>s.f).map(s=>s.t).join(' ');
+    interim=segs.filter(s=>!s.f).map(s=>s.t).join(' ');
+    finalT=(base+(base&&sessF?' ':'')+sessF).trim();render()};
   rc.onerror=e=>{
     if(e.error==='no-speech'||e.error==='aborted')return;
     if(e.error==='not-allowed'||e.error==='service-not-allowed'){want=false;toast('يرجى السماح باستخدام الميكروفون');stop()}
     else if(e.error!=='network')toast('خطأ: '+e.error)};
   rc.onend=()=>{ // لا يتوقف عند الصمت: إعادة التشغيل تلقائيًا
-    if(want){setTimeout(()=>{try{rc.lang=$('#lang').value;rc.start()}catch(_){}},150)}};
+    if(want){base=finalT;sessF='';interim='';setTimeout(()=>{try{rc.lang=$('#lang').value;rc.start()}catch(_){}},150)}};
 }
 function start(){
   if(!SR){toast('المتصفح لا يدعم التعرف على الصوت. استخدم Chrome');return}
-  setup();want=true;on=true;$('#exp').classList.remove('show');
+  base=finalT;sessF='';setup();want=true;on=true;$('#exp').classList.remove('show');
   try{rc.start()}catch(_){}
   recBtn.classList.add('on');recBtn.textContent='⏹';st.textContent='جارٍ الاستماع... تحدّث بحرية';
   $('#lang').disabled=true;t0=Date.now();
@@ -148,7 +154,7 @@ function stop(){
   recBtn.classList.remove('on');recBtn.textContent='🎙';clearInterval(timer);$('#lang').disabled=false;
   st.textContent=finalT?'تم الإيقاف — يمكنك الحفظ الآن':'اضغط للبدء بالتسجيل';render()}
 recBtn.onclick=()=>on?stop():start();
-$('#clr').onclick=()=>{finalT='';interim='';$('#exp').classList.remove('show');$('#tm').textContent='00:00';render()};
+$('#clr').onclick=()=>{base='';sessF='';finalT='';interim='';$('#exp').classList.remove('show');$('#tm').textContent='00:00';render()};
 ['col','fnt','sz','lang'].forEach(i=>$('#'+i).addEventListener('input',style));
 
 $('#save').onclick=()=>{
