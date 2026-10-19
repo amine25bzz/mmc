@@ -178,13 +178,14 @@ function setup(){
   rc.onend=()=>{
     if(interim){finalT=mergeText(finalT,interim);lastC=Date.now();interim=''}
     render();
-    if(want)setTimeout(()=>{if(want){try{setup();rc.start()}catch(_){}}},200)};
+    if(want)setTimeout(()=>{if(want){try{setup();rc.start()}catch(_){}}},450)};
 }
 function start(){
   if(!SR){toast(tr('nosup'));return}
+  if(rc){rc.onend=rc.onresult=rc.onerror=null;try{rc.abort()}catch(_){}}
   setup();want=true;on=true;document.body.classList.remove('sh');
-  try{rc.start()}catch(_){}
-  recBtn.classList.add('on');recBtn.innerHTML=STOP;setSt('live');$('#lang').disabled=true;t0=Date.now();
+  setTimeout(()=>{if(want){try{rc.start()}catch(_){}}},350);
+  recBtn.classList.add('on');recBtn.innerHTML=STOP;setSt('live');t0=Date.now();
   timer=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);$('#tm').textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')},500);
   render()}
 function stop(){
@@ -195,6 +196,7 @@ function stop(){
 recBtn.onclick=()=>on?stop():start();
 $('#clr').onclick=()=>{finalT='';interim='';$('#tm').textContent='00:00';setSt('idle');render()};
 ['col','fnt','sz','lang'].forEach(i=>$('#'+i).addEventListener('input',style));
+$('#lang').addEventListener('change',()=>{if(on&&rc){try{rc.stop()}catch(_){}}});
 $('#save').onclick=()=>{
   try{const a=JSON.parse(localStorage.getItem('v2t')||'[]');a.unshift({t:finalT,d:Date.now()});localStorage.setItem('v2t',JSON.stringify(a.slice(0,50)))}catch(_){}
   document.body.classList.add('sh');toast(tr('saved'))};
