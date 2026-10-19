@@ -119,26 +119,34 @@ function render(){
   out.scrollTop=out.scrollHeight;
   $('#clr').disabled=!has||on;$('#save').disabled=!has||on}
 
+const nz=w=>w.toLowerCase().replace(/[.,!?؟،;:"'«»()\-]/g,'');
+let lastC=0;
+// خوارزمية منع التكرار: تدمج الجملة الجديدة مع النص الحالي وتحذف أي جزء مكرر
+function mergeText(b,s){
+  s=(s||'').trim();if(!s)return b;if(!b)return s;
+  const bw=b.split(/\s+/),sw=s.split(/\s+/),B=bw.map(nz),S=sw.map(nz);
+  if(sw.length>1){const tail=' '+B.slice(-(sw.length+4)).join(' ')+' ';if(tail.includes(' '+S.join(' ')+' '))return b}
+  else if(S[0]===B[B.length-1]&&Date.now()-lastC<1500)return b;
+  for(let k=Math.min(B.length,S.length,60);k>=2;k--){
+    if(B.slice(-k).join(' ')===S.slice(0,k).join(' '))return(b+' '+sw.slice(k).join(' ')).trim()}
+  return b+' '+s}
 function setup(){
-  rc=new SR();rc.continuous=true;rc.interimResults=true;rc.maxAlternatives=1;rc.lang=$('#lang').value;
+  rc=new SR();rc.continuous=false;rc.interimResults=true;rc.maxAlternatives=1;rc.lang=$('#lang').value;
+  let done=-1;
   rc.onresult=e=>{
-    const segs=[];
-    for(let i=0;i<e.results.length;i++){
-      const r=e.results[i],tx=r[0].transcript.trim();if(!tx)continue;
-      const l=segs[segs.length-1];
-      if(l){
-        if(l.t===tx||l.t.endsWith(tx)){if(r.isFinal)l.f=true;continue}
-        if(tx.startsWith(l.t)){l.t=tx;l.f=r.isFinal;continue}}
-      segs.push({t:tx,f:r.isFinal})}
-    sessF=segs.filter(s=>s.f).map(s=>s.t).join(' ');
-    interim=segs.filter(s=>!s.f).map(s=>s.t).join(' ');
-    finalT=(base+(base&&sessF?' ':'')+sessF).trim();render()};
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i],tx=r[0].transcript.trim();
+      if(r.isFinal){if(i>done){done=i;finalT=mergeText(finalT,tx);lastC=Date.now()}interim=''}
+      else{const m=mergeText(finalT,tx);interim=m.startsWith(finalT)?m.slice(finalT.length).trim():tx}}
+    render()};
   rc.onerror=e=>{
     if(e.error==='no-speech'||e.error==='aborted')return;
     if(e.error==='not-allowed'||e.error==='service-not-allowed'){want=false;toast('يرجى السماح باستخدام الميكروفون');stop()}
     else if(e.error!=='network')toast('خطأ: '+e.error)};
-  rc.onend=()=>{ // لا يتوقف عند الصمت: إعادة التشغيل تلقائيًا
-    if(want){base=finalT;sessF='';interim='';setTimeout(()=>{try{rc.lang=$('#lang').value;rc.start()}catch(_){}},150)}};
+  rc.onend=()=>{
+    if(interim){finalT=mergeText(finalT,interim);lastC=Date.now();interim=''}
+    render();
+    if(want)setTimeout(()=>{if(want){try{setup();rc.start()}catch(_){}}},200)};
 }
 function start(){
   if(!SR){toast('المتصفح لا يدعم التعرف على الصوت. استخدم Chrome');return}
@@ -150,7 +158,7 @@ function start(){
   render()}
 function stop(){
   want=false;on=false;try{rc&&rc.stop()}catch(_){}
-  if(interim){finalT+=(finalT?' ':'')+interim;interim=''}
+  if(interim){finalT=mergeText(finalT,interim);interim=''}
   recBtn.classList.remove('on');recBtn.textContent='🎙';clearInterval(timer);$('#lang').disabled=false;
   st.textContent=finalT?'تم الإيقاف — يمكنك الحفظ الآن':'اضغط للبدء بالتسجيل';render()}
 recBtn.onclick=()=>on?stop():start();
